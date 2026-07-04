@@ -216,7 +216,7 @@ export class TradeMarkerManager {
 
     marker.removalTimeout = setTimeout(() => {
       this.removeMarker(tradeId)
-    }, 5000)
+    }, 3000)
   }
 
   updateTimer(tradeId: string, remainingSeconds: number): void {

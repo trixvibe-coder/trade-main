@@ -213,7 +213,7 @@ export function TradingPage() {
   useEffect(() => {
     if (!markerManagerRef.current) return
     const currencySymbol = getCurrencySymbol(currencyRef.current)
-    for (const trade of openPositionsRef.current) {
+    for (const trade of openPositions) {
       if (!markerManagerRef.current.hasMarker(trade.id)) {
         markerManagerRef.current.addTrade(trade, currencySymbol)
       }
@@ -224,7 +224,7 @@ export function TradingPage() {
     if (!markerManagerRef.current) return
     const cur = currencyRef.current
 
-    for (const trade of userTradesRef.current) {
+    for (const trade of userTrades) {
       if (trade.status === 'open') continue
       if (notifiedTradesRef.current.has(trade.id)) continue
 

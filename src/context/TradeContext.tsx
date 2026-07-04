@@ -38,7 +38,7 @@ interface TradeContextValue {
 const TradeContext = createContext<TradeContextValue | null>(null)
 
 export function TradeProvider({ children }: { children: ReactNode }) {
-  const { user, updateProfile } = useAuth()
+  const { user, adjustBalanceAtomic } = useAuth()
   const [trades, setTrades] = useState<Trade[]>(() => getItem<Trade[]>(STORAGE_KEYS.TRADES, []))
   const [transactions, setTransactions] = useState<Transaction[]>(() =>
     getItem<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, []),
@@ -47,8 +47,8 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   const tradesRef = useRef(trades)
   tradesRef.current = trades
 
-  const userRef = useRef(user)
-  userRef.current = user
+  const settledTradesRef = useRef<Set<string>>(new Set())
+  const settledTxRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     setItem(STORAGE_KEYS.TRADES, trades)
@@ -83,7 +83,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       }
 
       setTrades((prev) => [trade, ...prev])
-      updateProfile({ balance: user.balance - params.investment })
+      adjustBalanceAtomic(-params.investment)
 
       const tx: Transaction = {
         id: generateId(),
@@ -97,14 +97,21 @@ export function TradeProvider({ children }: { children: ReactNode }) {
 
       return trade
     },
-    [user, updateProfile],
+    [user, adjustBalanceAtomic],
   )
 
   const settleTradeById: TradeContextValue['settleTradeById'] = useCallback(
     (tradeId, exitPrice) => {
+      if (settledTradesRef.current.has(tradeId)) return null
+
       const currentTrades = tradesRef.current
       const tradeIndex = currentTrades.findIndex((t) => t.id === tradeId && t.status === 'open')
-      if (tradeIndex === -1) return null
+      if (tradeIndex === -1) {
+        settledTradesRef.current.add(tradeId)
+        return null
+      }
+
+      settledTradesRef.current.add(tradeId)
 
       const trade = currentTrades[tradeIndex]
       const settlement = settleTrade(
@@ -123,14 +130,31 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       }
 
       setTrades((prev) => {
-        const idx = prev.findIndex((t) => t.id === tradeId && t.status === 'open')
+        const idx = prev.findIndex((t) => t.id === tradeId)
         if (idx === -1) return prev
         const next = [...prev]
         next[idx] = updatedTrade
         return next
       })
 
-      const result: SettlementResult = {
+      if (settlement.payout > 0) {
+        adjustBalanceAtomic(settlement.payout)
+      }
+
+      if (!settledTxRef.current.has(tradeId)) {
+        settledTxRef.current.add(tradeId)
+        const tx: Transaction = {
+          id: generateId(),
+          userId: trade.userId,
+          type: 'trade',
+          amount: settlement.payout,
+          description: `Trade ${settlement.status}: ${trade.direction} ${trade.symbol}`,
+          createdAt: Date.now(),
+        }
+        setTransactions((prev) => [tx, ...prev])
+      }
+
+      return {
         tradeId,
         status: settlement.status,
         payout: settlement.payout,
@@ -139,24 +163,8 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         direction: trade.direction,
         investment: trade.investment,
       }
-
-      if (settlement.payout > 0 && userRef.current) {
-        updateProfile({ balance: userRef.current.balance + settlement.payout })
-      }
-
-      const tx: Transaction = {
-        id: generateId(),
-        userId: trade.userId,
-        type: 'trade',
-        amount: settlement.payout,
-        description: `Trade ${settlement.status}: ${trade.direction} ${trade.symbol}`,
-        createdAt: Date.now(),
-      }
-      setTransactions((prev) => [tx, ...prev])
-
-      return result
     },
-    [updateProfile],
+    [adjustBalanceAtomic],
   )
 
   const getUserTrades = useCallback(

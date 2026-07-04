@@ -10,6 +10,7 @@ interface AuthContextValue {
   register: (username: string, email: string, password: string) => { success: boolean; error?: string }
   logout: () => void
   updateProfile: (updates: Partial<User>) => void
+  adjustBalanceAtomic: (amount: number) => void
   changePassword: (currentPassword: string, newPassword: string) => { success: boolean; error?: string }
   updateBalance: (userId: string, newBalance: number) => void
   adjustBalance: (amount: number, description: string) => void
@@ -135,9 +136,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile: AuthContextValue['updateProfile'] = (updates) => {
     if (!user) return
-    const updated = { ...user, ...updates }
-    if (updates.username) updated.avatar = generateAvatar(updates.username)
-    setUser(updated)
+    setUser((prev) => {
+      if (!prev) return prev
+      const updated = { ...prev, ...updates }
+      if (updates.username) updated.avatar = generateAvatar(updates.username)
+      return updated
+    })
+  }
+
+  const adjustBalanceAtomic = (amount: number) => {
+    setUser((prev) => {
+      if (!prev) return prev
+      return { ...prev, balance: Math.max(0, prev.balance + amount) }
+    })
   }
 
   const changePassword: AuthContextValue['changePassword'] = (currentPassword, newPassword) => {
@@ -156,8 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const adjustBalance: AuthContextValue['adjustBalance'] = (amount, description) => {
     if (!user) return
-    const newBalance = Math.max(0, user.balance + amount)
-    updateProfile({ balance: newBalance })
+    adjustBalanceAtomic(amount)
 
     const transactions = getItem<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, [])
     transactions.unshift({
@@ -201,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         updateProfile,
+        adjustBalanceAtomic,
         changePassword,
         updateBalance,
         adjustBalance,
