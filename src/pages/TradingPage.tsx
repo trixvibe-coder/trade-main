@@ -81,6 +81,11 @@ export function TradingPage() {
     [userTrades, symbol],
   )
 
+  const settledTradeKey = useMemo(
+    () => userTrades.filter((t) => t.status !== 'open').map((t) => t.id + ':' + t.status).join(','),
+    [userTrades],
+  )
+
   const investmentNum = parseFloat(investment) || 0
   const potentialProfit = (investmentNum * profitPercent) / 100
 
@@ -224,7 +229,7 @@ export function TradingPage() {
     if (!markerManagerRef.current) return
     const cur = currencyRef.current
 
-    for (const trade of userTrades) {
+    for (const trade of userTradesRef.current) {
       if (trade.status === 'open') continue
       if (notifiedTradesRef.current.has(trade.id)) continue
 
@@ -242,7 +247,8 @@ export function TradingPage() {
         showToast(`${trade.symbol} — DRAW (refunded)`, 'info')
       }
     }
-  }, [userTrades])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledTradeKey])
 
   useEffect(() => {
     const loop = () => {
