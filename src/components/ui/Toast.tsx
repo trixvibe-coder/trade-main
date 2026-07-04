@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, XCircle, Info } from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -18,16 +18,22 @@ export function showToast(message: string, type: ToastType = 'info') {
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const activeKeysRef = useRef<Set<string>>(new Set())
 
-  const remove = useCallback((id: string) => {
+  const remove = useCallback((id: string, key: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
+    activeKeysRef.current.delete(key)
   }, [])
 
   useEffect(() => {
     toastCallback = (toast) => {
+      const key = `${toast.type}:${toast.message}`
+      if (activeKeysRef.current.has(key)) return
+      activeKeysRef.current.add(key)
+
       const id = `${Date.now()}-${Math.random()}`
       setToasts((prev) => [...prev, { ...toast, id }])
-      setTimeout(() => remove(id), 3000)
+      setTimeout(() => remove(id, key), 3000)
     }
     return () => {
       toastCallback = null
